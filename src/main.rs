@@ -1,6 +1,6 @@
 mod app;
+mod color;
 mod theme;
-
 fn main() -> eframe::Result {
     eframe::run_native(
         "RGB cube",
