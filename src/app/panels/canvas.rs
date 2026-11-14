@@ -24,7 +24,11 @@ const EDGES: [(usize, usize); 12] =
 impl ColorApp {
     pub(super) fn show_canvas(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show(ui, |ui| {
-            let (rect, _response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+            let (rect, response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+            let delta = response.drag_delta();
+            self.camera.yaw += delta.x * 0.004;
+            self.camera.pitch += delta.y.clamp(-1.5, 1.5) * 0.04;
+
             let painter = ui.painter_at(rect);
             let stroke = Stroke::new(1.5, ui.visuals().text_color());
 
