@@ -1,6 +1,9 @@
 use crate::app::{Camera, ColorApp};
 use crate::color;
 use eframe::egui::{self, Pos2, Rect, Stroke};
+
+// distance from the camera to the cube
+const DIST: f32 = 4.0;
 const CORNERS: [[f32; 3]; 8] = [
     [0.0, 0.0, 0.0], // black
     [1.0, 0.0, 0.0], // red
@@ -11,10 +14,6 @@ const CORNERS: [[f32; 3]; 8] = [
     [0.0, 1.0, 1.0], // cyan
     [1.0, 1.0, 1.0], // white
 ];
-
-// distance from the camera to the cube
-const DIST: f32 = 4.0;
-
 #[rustfmt::skip]
 const FACES: [[usize; 4]; 6] = [
     [0, 2, 3, 1], [4, 5, 7, 6], // B = 0, B = 1
@@ -29,6 +28,7 @@ impl ColorApp {
             let delta = response.drag_delta();
             self.camera.yaw += delta.x * 0.004;
             self.camera.pitch = (self.camera.pitch + delta.y * 0.004).clamp(-1.5, 1.5);
+
             let painter = ui.painter_at(rect);
             let stroke = Stroke::new(1.5, ui.visuals().text_color());
 
@@ -57,7 +57,8 @@ impl ColorApp {
                 // split into two triangles with base as the start point
                 mesh.add_triangle(base, base + 1, base + 2);
                 mesh.add_triangle(base, base + 2, base + 3);
-                // outlines.push(egui::Shape::closed_line(pts.to_vec(), stroke));
+
+                // add outlines only for visible faces
                 for i in 0..4 {
                     outlines.push(egui::Shape::line_segment([pts[i], pts[(i + 1) % 4]], stroke))
                 }
