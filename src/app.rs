@@ -1,19 +1,23 @@
 mod panels;
-
 use eframe::egui;
 
 use crate::color::{self, Cmyk, Rgb};
 
+pub(crate) struct Camera {
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
 pub struct ColorApp {
     rgb: Rgb,
     cmyk: Cmyk,
+    camera: Camera,
 }
 
 impl Default for ColorApp {
     fn default() -> Self {
-        // kolor startowy: akcent z theme.rs (#F28C28)
         let rgb = [242.0 / 255.0, 140.0 / 255.0, 40.0 / 255.0];
-        Self { rgb, cmyk: color::rgb_to_cmyk(rgb) }
+        Self { rgb, cmyk: color::rgb_to_cmyk(rgb), camera: Camera { yaw: 0.5, pitch: -0.3 } }
     }
 }
 
