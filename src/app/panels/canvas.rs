@@ -1,10 +1,10 @@
-use crate::app::{Camera, ColorApp};
-use crate::color;
-use crate::math::{mul, rx, ry};
-use eframe::egui::{self, Pos2, Rect, Stroke};
+mod view;
 
-/// distance from the camera to the cube
-const DIST: f32 = 4.0;
+use crate::app::ColorApp;
+use crate::color;
+use eframe::egui::{self, Pos2, Stroke};
+use view::View;
+
 /// corners of the rgb cube, defined as rgb channels
 const CORNERS: [[f32; 3]; 8] = [
     [0.0, 0.0, 0.0], // black
@@ -35,6 +35,7 @@ impl ColorApp {
             let painter = ui.painter_at(rect);
             let stroke = Stroke::new(1.5, ui.visuals().text_color());
             let [r, g, b] = self.rgb;
+            let view = View { camera: &self.camera, rect };
 
             let [slab, back, front] = [
                 // ideally this would be 3 boxes with one variable channel each (ie. going from [0,0,0] to [1,1,b], [1,g,1], [r,1,1])
@@ -50,36 +51,21 @@ impl ColorApp {
             // calculating which one we're facing at this time
             let slab_corners = box_corners(slab.0, slab.1);
             // if true, camera is above the cube cross-section (looking down at 'slab')
-            let above = faces_camera(FACES[1].map(|i| project(rotate(slab_corners[i], &self.camera), rect)));
+            let above = faces_camera(FACES[1].map(|i| view.project(slab_corners[i])));
 
             let back_corners = box_corners(back.0, back.1);
             // if true, camera is on the side looking at 'back'
-            let behind = faces_camera(FACES[5].map(|i| project(rotate(back_corners[i], &self.camera), rect)));
+            let behind = faces_camera(FACES[5].map(|i| view.project(back_corners[i])));
             let upper = if behind { [back, front] } else { [front, back] };
             let order = if above { [slab, upper[0], upper[1]] } else { [upper[0], upper[1], slab] };
 
             for (min, max) in order {
-                painter.extend(box_shapes(min, max, &self.camera, rect, stroke));
+                painter.extend(box_shapes(min, max, &view, stroke));
             }
         });
     }
 }
 
-fn rotate(p: [f32; 3], cam: &Camera) -> [f32; 3] {
-    // centering the cube around (0, 0, 0)
-    let [r, g, b] = p.map(|x| x - 0.5);
-    let xyz = [r, b, g]; // swapping around so blue is the vertical axis
-    let yawed = mul(ry(cam.yaw), xyz);
-    mul(rx(cam.pitch), yawed)
-}
-
-fn project(p: [f32; 3], rect: Rect) -> Pos2 {
-    let [x, y, z] = p;
-    let shrink_factor = DIST / (DIST - z);
-    let scale = rect.width().min(rect.height()) * 0.35;
-
-    rect.center() + egui::vec2(x, -y) * scale * shrink_factor
-}
 /// backface culling pretty much
 fn faces_camera(pts: [Pos2; 4]) -> bool {
     let u = pts[1] - pts[0];
@@ -89,13 +75,13 @@ fn faces_camera(pts: [Pos2; 4]) -> bool {
     cross > 1.0
 }
 
-fn box_shapes(min: [f32; 3], max: [f32; 3], cam: &Camera, rect: Rect, stroke: Stroke) -> Vec<egui::Shape> {
+fn box_shapes(min: [f32; 3], max: [f32; 3], view: &View, stroke: Stroke) -> Vec<egui::Shape> {
     let corners = box_corners(min, max);
     let mut outlines = Vec::new();
     let mut mesh = egui::Mesh::default();
 
     for face in FACES {
-        let pts = face.map(|i| project(rotate(corners[i], cam), rect));
+        let pts = face.map(|i| view.project(corners[i]));
         if !faces_camera(pts) {
             continue;
         }
