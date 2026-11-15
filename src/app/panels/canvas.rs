@@ -35,27 +35,29 @@ impl ColorApp {
             let stroke = Stroke::new(1.5, ui.visuals().text_color());
             let [r, g, b] = self.rgb;
 
-            let mut boxes = [
+            let [slab, back, front] = [
                 // ideally this would be 3 boxes with one variable channel each (ie. going from [0,0,0] to [1,1,b], [1,g,1], [r,1,1])
                 // unfortunately those overlap, so im going for something like this:
-                // #1 - [0,0,0] -> [1,1,b]
+                // slab (bottom one) - [0,0,0] -> [1,1,b]
                 ([0.0, 0.0, 0.0], [1.0, 1.0, b]),
-                // #2 - [0,0,b] -> [1,g,1]
+                // back - [0,0,b] -> [1,g,1]
                 ([0.0, 0.0, b], [1.0, g, 1.0]),
-                // #3 - [0,g,b] -> [r,1,1]
+                // front - [0,g,b] -> [r,1,1]
                 ([0.0, g, b], [r, 1.0, 1.0]),
             ];
+            // backface culling is only done per-box, so the order of rendering the boxes can result in see-through faces sometimes
+            // calculating which one we're facing at this time
+            let slab_corners = box_corners(slab.0, slab.1);
+            // if true, camera is above the cube cross-section (looking down at 'slab')
+            let above = faces_camera(FACES[1].map(|i| project(rotate(slab_corners[i], &self.camera), rect)));
 
-            // backface culling is done per box, resulting in artifacting when overlayed
-            // sorting boxes by Z axis before rendering:
-            boxes.sort_by(|lhs, rhs| {
-                let depth = |(min, max): &([f32; 3], [f32; 3])| -> f32 {
-                    let centre = [0, 1, 2].map(|axis| (min[axis] + max[axis]) / 2.0);
-                    rotate(centre, &self.camera)[2]
-                };
-                depth(lhs).total_cmp(&depth(rhs))
-            });
-            for (min, max) in boxes {
+            let back_corners = box_corners(back.0, back.1);
+            // if true, camera is on the side looking at 'back'
+            let behind = faces_camera(FACES[5].map(|i| project(rotate(back_corners[i], &self.camera), rect)));
+            let upper = if behind { [back, front] } else { [front, back] };
+            let order = if above { [slab, upper[0], upper[1]] } else { [upper[0], upper[1], slab] };
+
+            for (min, max) in order {
                 painter.extend(box_shapes(min, max, &self.camera, rect, stroke));
             }
         });
@@ -104,11 +106,15 @@ fn project(p: [f32; 3], rect: Rect) -> Pos2 {
 
     rect.center() + egui::vec2(x, -y) * scale * shrink_factor
 }
+/// backface culling pretty much
+fn faces_camera(pts: [Pos2; 4]) -> bool {
+    let u = pts[1] - pts[0];
+    let v = pts[2] - pts[0];
 
-fn faces_camera(u: Vec2, v: Vec2) -> bool {
     let cross = u.x * v.y - u.y * v.x;
-    cross <= 1.0
+    cross > 1.0
 }
+
 fn box_shapes(min: [f32; 3], max: [f32; 3], cam: &Camera, rect: Rect, stroke: Stroke) -> Vec<egui::Shape> {
     let corners = box_corners(min, max);
     let mut outlines = Vec::new();
@@ -116,10 +122,7 @@ fn box_shapes(min: [f32; 3], max: [f32; 3], cam: &Camera, rect: Rect, stroke: St
 
     for face in FACES {
         let pts = face.map(|i| project(rotate(corners[i], cam), rect));
-        // backface culling
-        let u = pts[1] - pts[0];
-        let v = pts[2] - pts[0];
-        if !faces_camera(u, v) {
+        if !faces_camera(pts) {
             continue;
         }
         let base = mesh.vertices.len() as u32;
