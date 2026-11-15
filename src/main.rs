@@ -1,5 +1,6 @@
 mod app;
 mod color;
+mod math;
 mod theme;
 fn main() -> eframe::Result {
     eframe::run_native(

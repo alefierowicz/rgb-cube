@@ -1,6 +1,7 @@
 use crate::app::{Camera, ColorApp};
 use crate::color;
-use eframe::egui::{self, Pos2, Rect, Stroke, Vec2};
+use crate::math::{mul, rx, ry};
+use eframe::egui::{self, Pos2, Rect, Stroke};
 
 /// distance from the camera to the cube
 const DIST: f32 = 4.0;
@@ -62,33 +63,6 @@ impl ColorApp {
             }
         });
     }
-}
-
-// https://msl.cs.uiuc.edu/planning/node102.html, fig. 3.40 and 3.41
-type Mat3 = [[f32; 3]; 3];
-
-#[rustfmt::skip]
-fn ry(angle: f32) -> Mat3 {
-    let (s, c) = angle.sin_cos();
-    [
-        [ c , 0.0,  s ], 
-        [0.0, 1.0, 0.0], 
-        [-s , 0.0,  c ]
-    ]
-}
-#[rustfmt::skip]
-fn rx(angle: f32) -> Mat3 {
-    let (s, c) = angle.sin_cos();
-    [
-        [1.0, 0.0, 0.0], 
-        [0.0,  c , -s ], 
-        [0.0,  s ,  c ]
-    ]
-}
-
-// literally just matrix multiplication
-fn mul(m: Mat3, v: [f32; 3]) -> [f32; 3] {
-    m.map(|row| row[0] * v[0] + row[1] * v[1] + row[2] * v[2])
 }
 
 fn rotate(p: [f32; 3], cam: &Camera) -> [f32; 3] {
