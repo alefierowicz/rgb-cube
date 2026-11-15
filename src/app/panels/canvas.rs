@@ -1,28 +1,10 @@
+mod color_box;
 mod view;
 
 use crate::app::ColorApp;
-use crate::color;
-use eframe::egui::{self, Pos2, Stroke};
+use color_box::{ColorBox, G_MAX, TOP};
+use eframe::egui::{self, Stroke};
 use view::View;
-
-/// corners of the rgb cube, defined as rgb channels
-const CORNERS: [[f32; 3]; 8] = [
-    [0.0, 0.0, 0.0], // black
-    [1.0, 0.0, 0.0], // red
-    [0.0, 1.0, 0.0], // green
-    [1.0, 1.0, 0.0], // yellow
-    [0.0, 0.0, 1.0], // blue
-    [1.0, 0.0, 1.0], // magenta
-    [0.0, 1.0, 1.0], // cyan
-    [1.0, 1.0, 1.0], // white
-];
-#[rustfmt::skip]
-/// faces of the cube, 4 corners each
-const FACES: [[usize; 4]; 6] = [
-    [0, 2, 3, 1], [4, 5, 7, 6], // B = 0, B = 1
-    [0, 4, 6, 2], [1, 3, 7, 5], // R = 0, R = 1
-    [0, 1, 5, 4], [2, 6, 7, 3], // G = 0, G = 1
-];
 
 impl ColorApp {
     pub(super) fn show_canvas(&mut self, ui: &mut egui::Ui) {
@@ -41,69 +23,25 @@ impl ColorApp {
                 // ideally this would be 3 boxes with one variable channel each (ie. going from [0,0,0] to [1,1,b], [1,g,1], [r,1,1])
                 // unfortunately those overlap, so im going for something like this:
                 // slab (bottom one) - [0,0,0] -> [1,1,b]
-                ([0.0, 0.0, 0.0], [1.0, 1.0, b]),
+                ColorBox { min: [0.0, 0.0, 0.0], max: [1.0, 1.0, b] },
                 // back - [0,0,b] -> [1,g,1]
-                ([0.0, 0.0, b], [1.0, g, 1.0]),
+                ColorBox { min: [0.0, 0.0, b], max: [1.0, g, 1.0] },
                 // front - [0,g,b] -> [r,1,1]
-                ([0.0, g, b], [r, 1.0, 1.0]),
+                ColorBox { min: [0.0, g, b], max: [r, 1.0, 1.0] },
             ];
             // backface culling is only done per-box, so the order of rendering the boxes can result in see-through faces sometimes
             // calculating which one we're facing at this time
-            let slab_corners = box_corners(slab.0, slab.1);
             // if true, camera is above the cube cross-section (looking down at 'slab')
-            let above = faces_camera(FACES[1].map(|i| view.project(slab_corners[i])));
+            let above = slab.faces_camera(TOP, &view);
 
-            let back_corners = box_corners(back.0, back.1);
             // if true, camera is on the side looking at 'back'
-            let behind = faces_camera(FACES[5].map(|i| view.project(back_corners[i])));
+            let behind = back.faces_camera(G_MAX, &view);
             let upper = if behind { [back, front] } else { [front, back] };
             let order = if above { [slab, upper[0], upper[1]] } else { [upper[0], upper[1], slab] };
 
-            for (min, max) in order {
-                painter.extend(box_shapes(min, max, &view, stroke));
+            for color_box in order {
+                painter.extend(color_box.shapes(&view, stroke));
             }
         });
     }
-}
-
-/// backface culling pretty much
-fn faces_camera(pts: [Pos2; 4]) -> bool {
-    let u = pts[1] - pts[0];
-    let v = pts[2] - pts[0];
-
-    let cross = u.x * v.y - u.y * v.x;
-    cross > 1.0
-}
-
-fn box_shapes(min: [f32; 3], max: [f32; 3], view: &View, stroke: Stroke) -> Vec<egui::Shape> {
-    let corners = box_corners(min, max);
-    let mut outlines = Vec::new();
-    let mut mesh = egui::Mesh::default();
-
-    for face in FACES {
-        let pts = face.map(|i| view.project(corners[i]));
-        if !faces_camera(pts) {
-            continue;
-        }
-        let base = mesh.vertices.len() as u32;
-        // add vertices
-        for (p, i) in pts.iter().zip(face) {
-            mesh.colored_vertex(*p, color::to_color32(corners[i]));
-        }
-        // split into two triangles with base as the start point
-        mesh.add_triangle(base, base + 1, base + 2);
-        mesh.add_triangle(base, base + 2, base + 3);
-
-        // add outlines only for visible faces
-        for i in 0..4 {
-            outlines.push(egui::Shape::line_segment([pts[i], pts[(i + 1) % 4]], stroke))
-        }
-    }
-    let mut shapes = vec![egui::Shape::mesh(mesh)];
-    shapes.extend(outlines);
-    shapes
-}
-
-fn box_corners(min: [f32; 3], max: [f32; 3]) -> [[f32; 3]; 8] {
-    CORNERS.map(|t| [0, 1, 2].map(|axis| min[axis] + t[axis] * (max[axis] - min[axis])))
 }
